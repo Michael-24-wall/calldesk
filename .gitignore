@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AssemblyAI voice agent starter
+agents/*.env
+node_modules/
