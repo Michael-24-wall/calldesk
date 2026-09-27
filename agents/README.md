@@ -40,6 +40,7 @@ For credentials, write `${MY_KEY}` anywhere in the file and put the value in `.e
 | [airtable-crm.jsonc](airtable-crm.jsonc) | one tool that reads records and one that writes them |
 | [cal-booking.jsonc](cal-booking.jsonc) | two tools used in sequence: check availability, then book |
 | [dtmf.jsonc](dtmf.jsonc) | `dtmf_collected_arguments`, for PCI compliance: keypad digits the model never sees |
+| [calldesk.jsonc](calldesk.jsonc) | the CallDesk agent: one `tools[]` entry posting collected call details to `${CALLDESK_TOOL_URL}`, with `enum` and `pattern` hints on the arguments |
 
 ## Two things to know
 

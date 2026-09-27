@@ -9,6 +9,7 @@ The API key stays in this process; the page only gets 60-second tokens.
 import copy
 import json
 import os
+import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -90,6 +91,27 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send(200, PAGE.encode(), "text/html")
 
+    def do_POST(self) -> None:  # noqa: N802
+        # Where the agent's http tools land. AssemblyAI posts here, so this is
+        # the seam where the real work belongs: replace the print with the SMS
+        # send and nothing above it has to change.
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length) if length else b"{}"
+        if self.path.split("?")[0] != "/tool/send_summary":
+            self._send(404, b'{"error":"not found"}', "application/json")
+            return
+        try:
+            args = json.loads(raw)
+        except json.JSONDecodeError:
+            self._send(400, b'{"error":"expected a json body"}', "application/json")
+            return
+        if not isinstance(args, dict):
+            self._send(400, b'{"error":"expected a json object"}', "application/json")
+            return
+        print("send_summary " + json.dumps(args, indent=2, sort_keys=True), flush=True)
+        # Handed back to the model, so keep it short and tell it what happened.
+        self._send(200, json.dumps({"sent": True}).encode(), "application/json")
+
     def log_message(self, *args) -> None:  # quiet; errors are printed above
         pass
 
@@ -118,6 +140,19 @@ def main() -> None:
             port += 1
 
     print(f"Talk to it: http://localhost:{port}")
+
+    # AssemblyAI calls the tool URL from its own machines, so a loopback address
+    # there is not this process. Say so now rather than after a call where the
+    # agent silently never reaches send_summary.
+    tool_url = os.environ.get("CALLDESK_TOOL_URL", "")
+    if tool_url and re.search(r"://(127\.0\.0\.1|localhost|0\.0\.0\.0)(:|\b)", tool_url):
+        print(f"\nNote: CALLDESK_TOOL_URL is {tool_url}")
+        print("  AssemblyAI runs that request on its own servers, so it will not")
+        print("  reach this process. Expose it with a tunnel, for example:")
+        print("    ngrok http " + str(port))
+        print("  then set CALLDESK_TOOL_URL to the https URL ngrok prints and")
+        print("  re-run publish.py.")
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:

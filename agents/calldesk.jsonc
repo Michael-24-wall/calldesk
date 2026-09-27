@@ -1,0 +1,92 @@
+// CallDesk: the inbound call assistant for local service businesses.
+//
+// The agent itself is this file. Changing the greeting, the prompt, or the
+// summary tool means editing here and re-running publish.py, then every browser
+// tab and phone number pointed at the agent id picks the change up on the next
+// call. No deployment code changes.
+//
+// Publish with:  AGENT=calldesk python publish.py
+//
+// https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent
+{
+  // Shown in the AssemblyAI dashboard. Safe to rename: the agent is tracked by
+  // the AGENT_ID_CALLDESK in your .env, not by this.
+  "name": "CallDesk",
+
+  // Who the agent is and what it may say. Voice-first: short spoken sentences,
+  // no bullet points, no formatting read aloud. The last two sentences are what
+  // make the tool actually fire; without them the agent collects everything and
+  // then politely ends the call without calling it.
+  // https://www.assemblyai.com/docs/voice-agents/voice-agent-api/prompting-guide
+  "system_prompt": "You are CallDesk, an inbound call assistant for a local service business. Answer questions about hours and services. Collect the caller's name, callback number, problem description, and preferred time. Keep responses under 2 sentences. If unsure, take a message and mark it urgent if the caller sounds stressed. Once you have all four details, call send_summary to pass them to the business owner, then tell the caller someone will follow up. When in doubt, call the tool. A wasted call is fine. Answering wrong from memory is not. Never quote a callback time or a promise from the business that has not come back from the tool. No exclamation marks.",
+
+  // Voice catalog: https://www.assemblyai.com/docs/voice-agents/voice-agent-api/voices
+  // alba is US English. The voice is immutable once a session is established,
+  // so changing this only affects calls that start after the change.
+  "voice": { "voice_id": "alba" },
+
+  // The one optional field worth setting every time. Without it the agent says
+  // nothing when the call connects, and silence reads as a broken line.
+  // https://www.assemblyai.com/docs/voice-agents/voice-agent-api/greeting
+  "greeting": "Thanks for calling. How can I help you today?",
+
+  "tools": [
+    {
+      "name": "send_summary",
+
+      // Read by the model to decide when to call it. Name the trigger and the
+      // precondition, or the most common failure is a tool that never fires.
+      "description": "Send a summary of the call to the business owner. Call this once you have the caller's name, callback number, problem description, and preferred time. Do not call it for a general question that needs no visit, such as asking for opening hours.",
+
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "caller_name": {
+            "type": "string",
+            "description": "The caller's full name as they said it.",
+            "examples": ["Dana Whitfield", "Marcus Lee"]
+          },
+          "callback_number": {
+            "type": "string",
+            "description": "The number to call back, including country code. Callers may read digits one at a time, so this can arrive with spaces between them.",
+            "pattern": " *(\\+|[0-9])[0-9 +()-]{6,}",
+            "examples": ["+14155552671", "+1 415 555 2671", "415 555 2671"]
+          },
+          "problem_description": {
+            "type": "string",
+            "description": "What the caller needs, in their own words, kept short. For example 'burst pipe in the kitchen' or 'toothache, right side'.",
+            "examples": ["burst pipe under the sink", "no hot water", "broken outlet in the bedroom"]
+          },
+          "urgency": {
+            "type": "string",
+            "description": "How soon the business should get back to them. Use high when the caller sounds stressed or describes damage, safety, or pain. Use low for a routine question or a non-urgent request.",
+            "enum": ["low", "medium", "high"]
+          }
+        },
+        "required": ["caller_name", "callback_number", "problem_description", "urgency"]
+      },
+
+      // interactive keeps the agent talking while the request runs, so a slow
+      // or failing tool call never reads as a dropped line. hold would silence
+      // the agent until the result came back, which is the wrong trade while
+      // the endpoint is still being stood up.
+      // https://www.assemblyai.com/docs/voice-agents/voice-agent-api/tools/overview#execution-modes
+      "execution_mode": "interactive",
+      "timeout_seconds": 5,
+
+      // AssemblyAI makes this request, not the browser, so the tool works on a
+      // phone call too. That also means 127.0.0.1 resolves on AssemblyAI's
+      // machine, not yours: for local development the URL has to be a tunnel you
+      // can reach from the internet, and for a deployed agent it is your own
+      // HTTPS endpoint. See the note in deployment/browser/README.md.
+      //
+      // The handler is the stub that prints the arguments; the real SMS send
+      // replaces the print.
+      // https://www.assemblyai.com/docs/voice-agents/voice-agent-api/tools/http-tools
+      "http": {
+        "url": "${CALLDESK_TOOL_URL}",
+        "http_method": "POST"
+      }
+    }
+  ]
+}
